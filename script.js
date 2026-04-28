@@ -40,7 +40,6 @@ async function loadChores() {
     });
 }
 
-// --- UPDATED SAVE FUNCTION WITH WHATSAPP ---
 async function saveChores() {
     const checkboxes = document.querySelectorAll('.chore-checkbox');
     const saveBtn = document.getElementById('saveBtn');
@@ -51,8 +50,6 @@ async function saveChores() {
     for (let cb of checkboxes) {
         const taskName = cb.getAttribute('data-name');
         const isChecked = cb.checked;
-        
-        // Find the person assigned to this specific task
         const personName = cb.nextElementSibling.querySelector('.assignee-text').innerText.replace('Assigned to: ', '');
         
         if (isChecked) {
@@ -64,17 +61,27 @@ async function saveChores() {
 
     saveBtn.innerText = "Saved!";
 
-    // If something was checked, ask to notify the group
     if (completedUpdates.length > 0) {
         const header = "🏠 *Nagalang Chores Update* \n\n";
-        const footer = "\n\nCheck the live board here: " + window.location.href;
+        const footer = "\n\nBoard: " + window.location.href;
         const fullMessage = encodeURIComponent(header + completedUpdates.join("\n") + footer);
         
-        // This opens the WhatsApp Share screen
-        const whatsappUrl = `https://api.whatsapp.com/send?text=${fullMessage}`;
+        // --- MOBILE vs DESKTOP DETECTION ---
+        // This checks if the user is on an iPhone, Android, or iPad
+        const isMobile = /iPhone|Android|iPad/i.test(navigator.userAgent);
         
-        if (confirm("Progress saved! Open WhatsApp to notify the group?")) {
-            window.open(whatsappUrl, '_blank');
+        // 'whatsapp://' opens the App. 'api.whatsapp' opens the Web/Browser version.
+        const whatsappUrl = isMobile 
+            ? `whatsapp://send?text=${fullMessage}` 
+            : `https://api.whatsapp.com/send?text=${fullMessage}`;
+        
+        if (confirm("Progress saved! Notify the group?")) {
+            // On mobile, window.location.href is often more reliable for opening apps
+            if (isMobile) {
+                window.location.href = whatsappUrl;
+            } else {
+                window.open(whatsappUrl, '_blank');
+            }
         }
     }
 
