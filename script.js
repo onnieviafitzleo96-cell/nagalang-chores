@@ -1,7 +1,10 @@
 // --- DATABASE CONNECTION ---
+// Paste your specific details here again:
 const SUPABASE_URL = "https://bwrxlbhikowzqagpaaxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_qqyY3PPpU5D0WdBk0TpL7w_sz_82AKH";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// We changed 'supabase' to 'db' here to avoid a naming conflict
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // --- YOUR HOUSE SETTINGS ---
 const housemates = ["Via", "Ching", "Gimbo", "Gadi", "Igat"];
@@ -16,17 +19,21 @@ const choresList = [
 // --- 1. LOAD DATA FROM CLOUD ---
 async function loadChores() {
     const board = document.getElementById('chore-board');
-    board.innerHTML = "Loading chores...";
+    board.innerHTML = "Connecting to Nagalang Cloud...";
 
-    let { data: chores, error } = await supabase.from('chores_status').select('*');
+    let { data: chores, error } = await db.from('chores_status').select('*');
 
     if (error) {
         console.error("Error loading:", error);
-        board.innerHTML = "Error loading chores. Make sure the 'chores_status' table exists in Supabase!";
+        board.innerHTML = "Error: Check your Supabase table settings!";
         return;
     }
 
     board.innerHTML = ""; 
+
+    if (chores.length === 0) {
+        board.innerHTML = "<p>No chores assigned yet. Click Shuffle!</p>";
+    }
 
     chores.forEach((item) => {
         const card = document.createElement('div');
@@ -48,7 +55,7 @@ async function loadChores() {
 
 // --- 2. SAVE TICK-BOX TO CLOUD ---
 async function toggleChore(id, isChecked) {
-    await supabase
+    await db
         .from('chores_status')
         .update({ is_completed: isChecked })
         .eq('id', id);
@@ -64,9 +71,8 @@ async function shuffleChores() {
         is_completed: false
     }));
 
-    // Clear old list and add new one
-    await supabase.from('chores_status').delete().neq('id', 0); 
-    await supabase.from('chores_status').insert(newAssignments);
+    await db.from('chores_status').delete().neq('id', 0); 
+    await db.from('chores_status').insert(newAssignments);
 
     loadChores(); 
 }
