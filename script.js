@@ -3,15 +3,30 @@ const SUPABASE_KEY = "sb_publishable_qqyY3PPpU5D0WdBk0TpL7w_sz_82AKH";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const housemates = ["Via", "Ching", "Gimbo", "Gadi", "Igat"];
-const choresList = ["Vacuum Stairs & Living Room", "Mop Stairs & Living Room", "Kitchen", "Backyard & Garage", "Dusting & Fridge"];
+
+// --- THE PERFECT 10 WEEKLY TASKS ---
+const weeklyTasks = [
+    "Vacuum Living Room & Stairs",
+    "Mop Living Room & Stairs",
+    "Kitchen: Sink & Dishes Rack",
+    "Kitchen: Stove & Microwave/Oven",
+    "Kitchen: Food Racks & Countertops",
+    "Clean Windows",
+    "Organize Fridge & Interior Racks",
+    "Backyard Sweep & Tidy",
+    "Garage Sweep & Tidy",
+    "Dusting: Ceilings, Walls, Fans & Spider Webs"
+];
 
 async function loadChores() {
     const board = document.getElementById('chore-board');
     const shuffleBtn = document.getElementById('shuffleBtn');
+    
     let { data: chores, error } = await db.from('chores_status').select('*');
     if (error) return;
 
     board.innerHTML = ""; 
+
     const allDone = chores.every(c => c.is_completed === true);
     const someDone = chores.some(c => c.is_completed === true);
 
@@ -52,9 +67,7 @@ async function saveChores() {
         const isChecked = cb.checked;
         const personName = cb.nextElementSibling.querySelector('.assignee-text').innerText.replace('Assigned to: ', '');
         
-        if (isChecked) {
-            completedUpdates.push(`✅ *${personName}* finished *${taskName}*`);
-        }
+        if (isChecked) completedUpdates.push(`✅ *${personName}* finished *${taskName}*`);
 
         await db.from('chores_status').update({ is_completed: isChecked }).eq('task_name', taskName);
     }
@@ -65,23 +78,12 @@ async function saveChores() {
         const header = "🏠 *Nagalang Chores Update* \n\n";
         const footer = "\n\nBoard: " + window.location.href;
         const fullMessage = encodeURIComponent(header + completedUpdates.join("\n") + footer);
-        
-        // --- MOBILE vs DESKTOP DETECTION ---
-        // This checks if the user is on an iPhone, Android, or iPad
         const isMobile = /iPhone|Android|iPad/i.test(navigator.userAgent);
-        
-        // 'whatsapp://' opens the App. 'api.whatsapp' opens the Web/Browser version.
-        const whatsappUrl = isMobile 
-            ? `whatsapp://send?text=${fullMessage}` 
-            : `https://api.whatsapp.com/send?text=${fullMessage}`;
+        const whatsappUrl = isMobile ? `whatsapp://send?text=${fullMessage}` : `https://wa.me/?text=${fullMessage}`;
         
         if (confirm("Progress saved! Notify the group?")) {
-            // On mobile, window.location.href is often more reliable for opening apps
-            if (isMobile) {
-                window.location.href = whatsappUrl;
-            } else {
-                window.open(whatsappUrl, '_blank');
-            }
+            if (isMobile) window.location.href = whatsappUrl;
+            else window.open(whatsappUrl, '_blank');
         }
     }
 
@@ -91,32 +93,28 @@ async function saveChores() {
 
 async function shuffleChores() {
     if (!confirm("Rotate chores for the new week?")) return;
-    let { data: currentChores } = await db.from('chores_status').select('*');
-    let newAssignments = [];
 
-    if (currentChores && currentChores.length > 0) {
-        let currentPeople = choresList.map(cName => {
-            const found = currentChores.find(c => c.task_name === cName);
-            return found ? found.assigned_to : null;
-        });
-        let rotatedPeople = [...currentPeople];
-        rotatedPeople.unshift(rotatedPeople.pop());
-        newAssignments = choresList.map((chore, index) => ({
-            task_name: chore,
-            assigned_to: rotatedPeople[index],
-            is_completed: false
-        }));
-    } else {
-        let shuffledNames = [...housemates].sort(() => Math.random() - 0.5);
-        newAssignments = choresList.map((chore, index) => ({
-            task_name: chore,
-            assigned_to: shuffledNames[index % shuffledNames.length],
-            is_completed: false
-        }));
+    // Get current shuffle count for rotation
+    let { data: settings } = await db.from('app_settings').select('shuffle_count').eq('id', 1).single();
+    let currentCount = settings ? settings.shuffle_count : 0;
+    let nextCount = currentCount + 1;
+
+    // Shift names based on count so rotation is always different
+    let rotatedNames = [...housemates];
+    for (let i = 0; i < (nextCount % housemates.length); i++) {
+        rotatedNames.push(rotatedNames.shift());
     }
+
+    const newAssignments = weeklyTasks.map((chore, index) => ({
+        task_name: chore,
+        assigned_to: rotatedNames[index % rotatedNames.length],
+        is_completed: false
+    }));
 
     await db.from('chores_status').delete().neq('task_name', 'placeholder'); 
     await db.from('chores_status').insert(newAssignments);
+    await db.from('app_settings').update({ shuffle_count: nextCount }).eq('id', 1);
+
     loadChores();
 }
 
