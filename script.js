@@ -4,7 +4,6 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const housemates = ["Via", "Ching", "Gimbo", "Gadi", "Igat"];
 
-// --- THE PERFECT 10 WEEKLY TASKS ---
 const weeklyTasks = [
     "Vacuum Living Room & Stairs",
     "Mop Living Room & Stairs",
@@ -27,18 +26,21 @@ async function loadChores() {
 
     board.innerHTML = ""; 
 
-    const allDone = chores.every(c => c.is_completed === true);
+    const allDone = chores.length > 0 && chores.every(c => c.is_completed === true);
     const someDone = chores.some(c => c.is_completed === true);
 
     if (someDone && !allDone) {
         shuffleBtn.disabled = true;
         shuffleBtn.innerText = "Locked (Finish all chores!)";
-    } else if (allDone) {
+        shuffleBtn.style.opacity = "0.5";
+    } else if (allDone && chores.length > 0) {
         shuffleBtn.disabled = false;
         shuffleBtn.innerText = "Start New Week 🚀";
+        shuffleBtn.style.opacity = "1";
     } else {
         shuffleBtn.disabled = false;
         shuffleBtn.innerText = "Shuffle New Chores";
+        shuffleBtn.style.opacity = "1";
     }
 
     chores.forEach((item) => {
@@ -65,7 +67,8 @@ async function saveChores() {
     for (let cb of checkboxes) {
         const taskName = cb.getAttribute('data-name');
         const isChecked = cb.checked;
-        const personName = cb.nextElementSibling.querySelector('.assignee-text').innerText.replace('Assigned to: ', '');
+        const label = cb.nextElementSibling;
+        const personName = label.querySelector('.assignee-text').innerText.replace('Assigned to: ', '');
         
         if (isChecked) completedUpdates.push(`✅ *${personName}* finished *${taskName}*`);
 
@@ -87,19 +90,18 @@ async function saveChores() {
         }
     }
 
-    setTimeout(() => { saveBtn.innerText = "Save Progress"; }, 2000);
-    loadChores();
+    setTimeout(() => { 
+        saveBtn.innerText = "Save Progress"; 
+        loadChores();
+    }, 2000);
 }
 
 async function shuffleChores() {
     if (!confirm("Rotate chores for the new week?")) return;
 
-    // Get current shuffle count for rotation
     let { data: settings } = await db.from('app_settings').select('shuffle_count').eq('id', 1).single();
-    let currentCount = settings ? settings.shuffle_count : 0;
-    let nextCount = currentCount + 1;
+    let nextCount = (settings ? settings.shuffle_count : 0) + 1;
 
-    // Shift names based on count so rotation is always different
     let rotatedNames = [...housemates];
     for (let i = 0; i < (nextCount % housemates.length); i++) {
         rotatedNames.push(rotatedNames.shift());
