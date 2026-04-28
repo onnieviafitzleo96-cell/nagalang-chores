@@ -65,13 +65,36 @@ async function saveChores() {
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.innerText = "Saving...";
 
+    let completedTasks = [];
+
     for (let cb of checkboxes) {
         const taskName = cb.getAttribute('data-name');
         const isChecked = cb.checked;
+        
+        // If they just ticked a box, let's remember it for the message
+        if (isChecked) {
+            // Find the person's name from the label next to the checkbox
+            const personName = cb.nextElementSibling.querySelector('span').innerText.replace('Assigned to: ', '');
+            completedTasks.push(`${personName} finished ${taskName}!`);
+        }
+
         await db.from('chores_status').update({ is_completed: isChecked }).eq('task_name', taskName);
     }
 
     saveBtn.innerText = "Saved!";
+    
+    // --- WHATSAPP NOTIFICATION LOGIC ---
+    if (completedTasks.length > 0) {
+        const message = encodeURIComponent("🏠 Nagalang Update:\n" + completedTasks.join("\n"));
+        // This opens WhatsApp. You can even add your group link if you have it!
+        const whatsappUrl = `https://wa.me/?text=${message}`;
+        
+        const notify = confirm("Progress saved! Want to notify the WhatsApp group?");
+        if (notify) {
+            window.open(whatsappUrl, '_blank');
+        }
+    }
+
     setTimeout(() => { saveBtn.innerText = "Save Progress"; }, 2000);
     loadChores();
 }
