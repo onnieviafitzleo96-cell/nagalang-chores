@@ -9,14 +9,22 @@ async function loadChores() {
     const board = document.getElementById('chore-board');
     const shuffleBtn = document.getElementById('shuffleBtn');
     
-    let { data: chores, error } = await db.from('chores_status').select('*').order('id', { ascending: true });
+    // We removed .order('id') because your table uses 'task_name' as the key
+    let { data: chores, error } = await db.from('chores_status').select('*');
     
     if (error) {
-        board.innerHTML = "<p style='color:red'>Cloud Error. Check Supabase RLS!</p>";
+        console.error(error);
+        board.innerHTML = "<p style='color:red'>Database Error: " + error.message + "</p>";
         return;
     }
 
     board.innerHTML = ""; 
+
+    if (chores.length === 0) {
+        board.innerHTML = "<p>No chores yet. Click Shuffle!</p>";
+        shuffleBtn.disabled = false;
+        return;
+    }
 
     const anyDone = chores.some(c => c.is_completed === true);
     if (anyDone) {
@@ -31,7 +39,7 @@ async function loadChores() {
         const card = document.createElement('div');
         card.className = 'chore-card';
         card.innerHTML = `
-            <input type="checkbox" class="chore-checkbox" data-id="${item.id}" ${item.is_completed ? 'checked' : ''}>
+            <input type="checkbox" class="chore-checkbox" data-name="${item.task_name}" ${item.is_completed ? 'checked' : ''}>
             <label style="flex:1; cursor:pointer">
                 <strong>${item.task_name}</strong> <br>
                 <span style="font-size: 13px; color: #777;">Assigned to: ${item.assigned_to}</span>
@@ -47,9 +55,13 @@ async function saveChores() {
     saveBtn.innerText = "Saving...";
 
     for (let cb of checkboxes) {
-        const id = cb.getAttribute('data-id');
+        const taskName = cb.getAttribute('data-name');
         const isChecked = cb.checked;
-        await db.from('chores_status').update({ is_completed: isChecked }).eq('id', id);
+        
+        // We now use 'task_name' to find the right row to update
+        await db.from('chores_status')
+            .update({ is_completed: isChecked })
+            .eq('task_name', taskName);
     }
 
     saveBtn.innerText = "Saved!";
@@ -66,13 +78,13 @@ async function shuffleChores() {
             is_completed: false
         }));
 
-        await db.from('chores_status').delete().neq('id', 0); 
+        // Delete all and insert new
+        await db.from('chores_status').delete().neq('task_name', 'empty_placeholder'); 
         await db.from('chores_status').insert(newAssignments);
         loadChores();
     }
 }
 
-// Attach events when the page loads
 window.addEventListener('load', () => {
     loadChores();
     document.getElementById('saveBtn').addEventListener('click', saveChores);
