@@ -3,76 +3,68 @@ const SUPABASE_KEY = "sb_publishable_qqyY3PPpU5D0WdBk0TpL7w_sz_82AKH";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const housemates = ["Via", "Ching", "Gimbo", "Gadi", "Igat"];
-const choresList = [
-    "Vacuum Stairs & Living Room", 
-    "Mop Stairs & Living Room", 
-    "Kitchen", 
-    "Backyard & Garage", 
-    "Dusting & Fridge"
-];
+const choresList = ["Vacuum Stairs & Living Room", "Mop Stairs & Living Room", "Kitchen", "Backyard & Garage", "Dusting & Fridge"];
 
 const shuffleBtn = document.querySelector('.shuffle-btn');
 
-// --- 1. THE REFRESH ENGINE ---
+// 1. LOAD FROM DATABASE
 async function loadChores() {
     const board = document.getElementById('chore-board');
-    
-    let { data: chores, error } = await db.from('chores_status').select('*');
-    if (error) return;
+    let { data: chores, error } = await db.from('chores_status').select('*').order('id', { ascending: true });
+
+    if (error || !chores) return;
 
     board.innerHTML = ""; 
 
-    if (chores.length === 0) {
-        board.innerHTML = "<p>No chores assigned. Click Shuffle!</p>";
-        shuffleBtn.disabled = false; // Enable if empty
-        return;
-    }
-
-    // --- GREY OUT LOGIC ---
-    // Check if at least one person has ticked a box
-    const someoneFinished = chores.some(item => item.is_completed === true);
-    if (someoneFinished) {
+    // Lock Shuffle button if any chore is already ticked in the database
+    const anyDone = chores.some(c => c.is_completed);
+    if (anyDone) {
         shuffleBtn.disabled = true;
-        shuffleBtn.innerText = "Chore in progress... (Locked)";
+        shuffleBtn.innerText = "Locked (Chore in Progress)";
         shuffleBtn.style.opacity = "0.5";
-        shuffleBtn.style.cursor = "not-allowed";
     } else {
         shuffleBtn.disabled = false;
         shuffleBtn.innerText = "Shuffle New Chores";
         shuffleBtn.style.opacity = "1";
-        shuffleBtn.style.cursor = "pointer";
     }
 
     chores.forEach((item) => {
         const card = document.createElement('div');
         card.className = 'chore-card';
         card.innerHTML = `
-            <input type="checkbox" id="check-${item.id}" ${item.is_completed ? 'checked' : ''}>
-            <label for="check-${item.id}">
+            <input type="checkbox" class="chore-checkbox" data-id="${item.id}" ${item.is_completed ? 'checked' : ''}>
+            <label>
                 <strong>${item.task_name}</strong> <br>
                 <span>Assigned to: ${item.assigned_to}</span>
             </label>
         `;
-        
-        const checkbox = card.querySelector('input');
-        checkbox.addEventListener('change', () => toggleChore(item.id, checkbox.checked));
         board.appendChild(card);
     });
 }
 
-// --- 2. THE REAL-TIME MAGIC ---
-// This tells the website: "If anything changes in the database, refresh for everyone!"
-db.channel('custom-all-channel')
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'chores_status' }, () => {
-      loadChores();
-  })
-  .subscribe();
+// 2. SAVE ALL TICKS TO DATABASE
+async function saveChores() {
+    const checkboxes = document.querySelectorAll('.chore-checkbox');
+    const saveBtn = document.querySelector('.save-btn');
+    
+    saveBtn.innerText = "Saving...";
 
-async function toggleChore(id, isChecked) {
-    await db.from('chores_status').update({ is_completed: isChecked }).eq('id', id);
-    // Note: The Real-time listener above will trigger loadChores() for everyone
+    for (let cb of checkboxes) {
+        const id = cb.getAttribute('data-id');
+        const isChecked = cb.checked;
+
+        await db.from('chores_status')
+            .update({ is_completed: isChecked })
+            .eq('id', id);
+    }
+
+    saveBtn.innerText = "Saved!";
+    setTimeout(() => { saveBtn.innerText = "Save Progress"; }, 2000);
+    
+    loadChores(); // Refresh to update Shuffle button status
 }
 
+// 3. SHUFFLE (ONLY WORKS IF NO TICKS SAVED)
 async function shuffleChores() {
     let shuffledNames = [...housemates].sort(() => Math.random() - 0.5);
     const newAssignments = choresList.map((chore, index) => ({
@@ -87,4 +79,3 @@ async function shuffleChores() {
 }
 
 window.onload = loadChores;
-shuffleBtn.addEventListener('click', shuffleChores);
